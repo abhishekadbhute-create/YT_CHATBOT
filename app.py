@@ -21,6 +21,11 @@ hf_token = (
 st.title("🎥 YouTube Chatbot")
 
 youtube_url = st.text_input("Paste YouTube Video URL")
+manual_transcript = st.text_area(
+    "Or paste Transcript / Text manually (Optional - use this if YouTube blocks Streamlit Cloud IP):",
+    height=150,
+    placeholder="Paste transcript text here..."
+)
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -31,39 +36,58 @@ if "current_video_id" not in st.session_state:
 
 if st.button("Load Video"):
 
-    # Get video ID
-    if "v=" in youtube_url:
-        video_id = youtube_url.split("v=")[1].split("&")[0]
-    elif "youtu.be/" in youtube_url:
-        video_id = youtube_url.split("youtu.be/")[1].split("?")[0]
+    transcript = ""
+
+    # Option A: If manual transcript is provided
+    if manual_transcript.strip():
+        transcript = manual_transcript.strip()
+        video_id = youtube_url.strip() or "manual_input"
     else:
-        st.error("Invalid YouTube URL")
-        st.stop()
+        # Option B: Auto-fetch from YouTube
+        if "v=" in youtube_url:
+            video_id = youtube_url.split("v=")[1].split("&")[0]
+        elif "youtu.be/" in youtube_url:
+            video_id = youtube_url.split("youtu.be/")[1].split("?")[0]
+        else:
+            st.error("Please enter a valid YouTube URL or paste transcript text manually above.")
+            st.stop()
 
-    try:
-        api = YouTubeTranscriptApi()
-        
-        # Try fetching English transcript first, fallback to translation if needed
         try:
-            transcript_list = api.fetch(video_id, languages=["en"])
-        except Exception:
+            api = YouTubeTranscriptApi()
+            
+            # Try fetching English transcript first, fallback to translation if needed
             try:
-                transcript_list_obj = api.list(video_id)
-                try:
-                    transcript_obj = transcript_list_obj.find_transcript(["en"])
-                except Exception:
-                    first_transcript = next(iter(transcript_list_obj))
-                    transcript_obj = first_transcript.translate("en")
-                transcript_list = transcript_obj.fetch()
+                transcript_list = api.fetch(video_id, languages=["en"])
             except Exception:
-                # Fallback to general fetch
-                transcript_list = api.fetch(video_id, languages=["en", "hi"])
+                try:
+                    transcript_list_obj = api.list(video_id)
+                    try:
+                        transcript_obj = transcript_list_obj.find_transcript(["en"])
+                    except Exception:
+                        first_transcript = next(iter(transcript_list_obj))
+                        transcript_obj = first_transcript.translate("en")
+                    transcript_list = transcript_obj.fetch()
+                except Exception:
+                    # Fallback to general fetch
+                    transcript_list = api.fetch(video_id, languages=["en", "hi"])
 
-        transcript = " ".join(
-            chunk.text if hasattr(chunk, "text") else chunk["text"] for chunk in transcript_list
-        )
+            transcript = " ".join(
+                chunk.text if hasattr(chunk, "text") else chunk["text"] for chunk in transcript_list
+            )
 
-        st.success("Video loaded successfully!")
+        except TranscriptsDisabled:
+            st.error("No captions available for this video. Please paste transcript text manually above.")
+            st.stop()
+
+        except Exception as e:
+            st.error(
+                "⚠️ **YouTube IP Blocked on Cloud Server**: YouTube blocks automated scraper requests coming from cloud provider server IPs (AWS/Streamlit Cloud).\n\n"
+                "💡 **Workaround**: Simply copy and paste the video's transcript/text into the **'Or paste Transcript / Text manually'** box above and click **Load Video** again!"
+            )
+            st.stop()
+
+    if transcript:
+        st.success("Video content loaded successfully!")
 
         # Just for testing
         st.write(transcript[:1000])
@@ -89,14 +113,6 @@ if st.button("Load Video"):
         # Reset chat history and save active video ID
         st.session_state.chat_history = []
         st.session_state.current_video_id = video_id
-
-    except TranscriptsDisabled:
-        st.error("No captions available for this video.")
-        st.stop()
-
-    except Exception as e:
-        st.error(f"Error: {e}")
-        st.stop()
 
 # QUERY INPUT
 query = st.text_input(
