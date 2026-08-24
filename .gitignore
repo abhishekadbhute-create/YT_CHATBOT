@@ -1,0 +1,13 @@
+# Secrets and local environment
+.env
+
+# Python virtual environment
+venv/
+env/
+ENV/
+
+# Python cache & build outputs
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
