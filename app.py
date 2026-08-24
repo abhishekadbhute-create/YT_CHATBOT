@@ -11,7 +11,12 @@ from dotenv import load_dotenv
 
 # Load .env from the same folder as this script, regardless of cwd
 load_dotenv(dotenv_path=Path(__file__).parent / ".env")
-hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACEHUB_API_TOKEN")
+hf_token = (
+    os.getenv("HF_TOKEN")
+    or os.getenv("HUGGINGFACEHUB_API_TOKEN")
+    or (st.secrets.get("HUGGINGFACEHUB_API_TOKEN") if hasattr(st, "secrets") and "HUGGINGFACEHUB_API_TOKEN" in st.secrets else None)
+    or (st.secrets.get("HF_TOKEN") if hasattr(st, "secrets") and "HF_TOKEN" in st.secrets else None)
+)
 
 st.title("🎥 YouTube Chatbot")
 
